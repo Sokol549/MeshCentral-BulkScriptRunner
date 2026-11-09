@@ -1,0 +1,15 @@
+const assert = require('node:assert/strict');
+const vm = require('node:vm');
+const fs = require('node:fs');
+const { EventEmitter } = require('node:events');
+const source = fs.readFileSync(require('node:path').join(__dirname, '../agent-prototype/bulkrunner.js'), 'utf8');
+const messages = []; const child = new EventEmitter(); child.pid = 12; child.stdout = new EventEmitter(); child.stderr = new EventEmitter(); let input = ''; child.stdin = { write(s) { input += s; }, end() {} };
+let killed = null, commandArgs; const context = { module: { exports: {} }, Buffer, process: { platform: 'linux', env: {}, kill(id) { killed = id; } }, require(name) { assert.equal(name, 'child_process'); return { execFile(file, args) { commandArgs = args; return child; } }; } };
+vm.runInNewContext(source, context);
+const mesh = { SendCommand(m) { messages.push(m); } }, id = 'a'.repeat(32);
+context.module.exports.consoleaction({ attempt: id, op: 'run', os: 'linux', script: 'echo ok' }, null, null, mesh);
+assert.match(commandArgs[2], /set -e/); assert.equal(input, ''); assert.equal(messages[0].event, 'started');
+child.stdout.emit('data', Buffer.from('out')); child.stderr.emit('data', Buffer.from('err'));
+context.module.exports.consoleaction({ attempt: id, op: 'cancel' }, null, null, mesh); assert.equal(killed, 12);
+child.emit('exit', 2); assert.equal(messages[1].exitCode, 2); assert.equal(messages[1].stdout, 'out'); assert.equal(messages[1].stderr, 'err');
+console.log('Agent protocol checks passed (mocked MeshAgent)');

@@ -1,0 +1,11 @@
+const assert = require('node:assert/strict');
+const Dispatcher = require('../dispatcher');
+const callbacks = new Map(), active = new Set(); let peak = 0;
+const pool = new Dispatcher({ concurrency: 2, timeout: 5, targets: [1, 2, 3, 4].map(i => ({ node_id: String(i), online: i !== 4 })), transport: { start(row, done) { active.add(row.node_id); peak = Math.max(peak, active.size); callbacks.set(row.node_id, result => { active.delete(row.node_id); done(result); }); return { cancel() {} }; } } });
+pool.start(); assert.equal(active.size, 2); assert.equal(pool.results[3].status, 'Skipped');
+callbacks.get('1')({ confirmed: true, exit_code: 0, stdout: 'ok' }); assert.equal(pool.results[0].status, 'Success'); assert.equal(active.size, 2);
+pool.abort(); assert.equal(active.size, 2); callbacks.get('2')({ confirmed: false }); callbacks.get('3')({ confirmed: true, exit_code: 1 });
+assert.equal(pool.results[1].status, 'Unknown'); assert.equal(pool.results[2].status, 'Cancelled'); assert.equal(peak, 2);
+let finish; const unknown = new Dispatcher({ concurrency: 1, timeout: 5, targets: [{node_id:'a',online:true},{node_id:'b',online:true}], transport: { start(row, done) { finish = done; return { cancel() {} }; } } });
+unknown.start(); finish({confirmed:false}); assert.equal(unknown.results[0].status, 'Unknown'); assert.equal(unknown.results[1].status, 'Cancelled');
+console.log('Dispatcher checks passed');

@@ -1,0 +1,13 @@
+const assert = require('node:assert/strict');
+const AgentTransport = require('../agent-transport');
+let message, result;
+const agent = { dbNodeKey: 'node/a/1', send(s) { message = JSON.parse(s); } };
+const transport = new AgentTransport(() => agent, 'echo ok', 'linux');
+const handle = transport.start({ node_id: agent.dbNodeKey }, r => { result = r; });
+const id = message.attempt;
+assert.equal(transport.receive({ attempt: id, event: 'finished', exitCode: 0 }, { dbNodeKey: agent.dbNodeKey }), false);
+handle.cancel(); assert.equal(message.op, 'cancel');
+assert.equal(transport.receive({ attempt: id, event: 'finished', exitCode: 1, stderr: 'error' }, agent), true);
+assert.equal(result.confirmed, true); assert.equal(result.exit_code, 1); assert.equal(result.stderr, 'error');
+transport.start({ node_id: agent.dbNodeKey }, r => { result = r; }); transport.disconnected(agent); assert.equal(result.confirmed, false);
+console.log('Transport checks passed');

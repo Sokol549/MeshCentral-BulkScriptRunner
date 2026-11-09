@@ -1,0 +1,19 @@
+const fs = require('fs'), os = require('os'), path = require('path'), assert = require('assert/strict');
+const create = require('../bulkrunner');
+const root = fs.mkdtempSync(path.join(os.tmpdir(), 'br-integration-'));
+let plugin, messages = [], outbound;
+const agent = { authenticated: 2, dbNodeKey:'node/a/1', send(s){ outbound = JSON.parse(s); } };
+const node = { _id:'node/a/1', name:'test', meshid:'mesh/a/1', agent:{id:2} };
+const server = { datapath:root, webserver:{ wsagents:{'node/a/1':agent}, GetNodeWithRights(domain,user,id,cb){ cb(node, 0x20000, true); } } };
+const client = { user:{_id:'user/a/admin',siteadmin:-1,name:'admin'}, domain:{id:'a'}, ws:{send(s){messages.push(JSON.parse(s));}} };
+plugin = create({parent:server});
+plugin.serveraction({pluginaction:'run',nodeids:['node/a/1'],target_os:'windows',script:'echo test',workers:1,timeout:60}, client);
+setImmediate(() => {
+  assert.equal(outbound.op,'run');
+  plugin.serveraction({pluginaction:'agentResult',event:'finished',attempt:outbound.attempt,exitCode:3,stdout:'out',stderr:'err'}, agent);
+  const task=messages.filter(x=>x.type==='task').at(-1).task;
+  assert.equal(task.results[0].status,'Failed'); assert.equal(task.results[0].exit_code,3); assert.equal(task.results[0].stderr,'err');
+  assert.ok(fs.existsSync(path.join(root,'bulkrunner','history',task.task_id+'.json')));
+  plugin.serveraction({pluginaction:'history'},client); assert.equal(messages.at(-1).tasks.length,1);
+  console.log('Server execution integration passed');
+});

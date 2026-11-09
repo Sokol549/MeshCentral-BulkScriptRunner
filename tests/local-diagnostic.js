@@ -1,0 +1,11 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const vm = require('node:vm');
+const cp = require('node:child_process');
+const source = fs.readFileSync('agent-prototype/bulkrunner.js', 'utf8');
+const moduleObject = { exports: {} };
+const context = { module: moduleObject, Buffer, process, require(name) { if (name !== 'child_process') throw Error('Unexpected module'); return { execFile(file, args) { return cp.spawn(file, args.slice(1), { stdio: ['pipe', 'pipe', 'pipe'] }); } }; } };
+vm.runInNewContext(source, context);
+const timer = setTimeout(() => { console.error('Diagnostic timeout'); process.exitCode = 1; }, 15000);
+const mesh = { SendCommand(m) { if (m.event !== 'finished') return; clearTimeout(timer); try { assert.equal(m.exitCode, 3); assert.match(m.stdout, /bulk-test-output/); assert.match(m.stderr, /bulk-test-error/); console.log('Local PowerShell diagnostic passed: stdout, stderr, exit code'); } catch (e) { console.error(e); process.exitCode = 1; } } };
+moduleObject.exports.consoleaction({ attempt: 'a'.repeat(32), op: 'run', os: 'windows', script: "Write-Output 'bulk-test-output'; [Console]::Error.WriteLine('bulk-test-error'); exit 3" }, null, null, mesh);

@@ -11,8 +11,8 @@ function create(parent) {
     const obj = { exports: ['onWebUIStartupEnd', 'onBulkRunnerMessage'] };
     function send(client, data) {
         const payload = JSON.stringify(Object.assign({ action: 'plugin', plugin: 'bulkrunner', method: 'onBulkRunnerMessage' }, data));
-        if (client.ws && typeof client.ws.send === 'function') client.ws.send(payload);
-        else if (typeof client.send === 'function') client.send(payload);
+        try { if (client.ws && typeof client.ws.send === 'function') client.ws.send(payload);
+        else if (typeof client.send === 'function') client.send(payload); } catch (e) { console.warn('[BulkRunner] Client disconnected:', e.message); }
     }
     function read() {
         const value = JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -24,13 +24,16 @@ function create(parent) {
         try { fs.writeFileSync(temp, JSON.stringify(data, null, 2), { mode: 0o600, flag: 'wx' }); fs.renameSync(temp, file); }
         finally { if (fs.existsSync(temp)) fs.unlinkSync(temp); }
     }
+    const execute = require('./execution')(server, root, send);
     obj.serveraction = function(command, client) {
+        if (command && command.pluginaction === 'agentResult') { execute(command, client, null, null); return; }
         const user = client && client.user;
         if (!user || (user.siteadmin !== -1 && user.siteadmin !== 0xFFFFFFFF)) return;
         const domain = user._id && user._id.split('/')[1];
         if (domain === undefined) return;
         try {
             const action = command.pluginaction;
+            if (execute(command, client, user, domain)) return;
             if (action === 'list') {
                 const presets = read().filter(p => p.domain === domain).map(({ domain, ...p }) => p);
                 const db = server.db;
