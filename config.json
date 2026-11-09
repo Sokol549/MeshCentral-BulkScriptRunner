@@ -1,7 +1,7 @@
 {
   "name": "MeshCentral Bulk Script Runner",
   "shortName": "bulkrunner",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "author": "BulkScriptRunner contributors",
   "description": "Experimental bulk PowerShell execution for MeshCentral.",
   "license": "MIT",
