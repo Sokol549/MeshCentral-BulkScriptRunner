@@ -1,0 +1,18 @@
+{
+  "name": "MeshCentral Bulk Script Runner",
+  "shortName": "bulkrunner",
+  "version": "0.1.0",
+  "author": "BulkScriptRunner contributors",
+  "description": "Предварительная версия массового запуска скриптов: выбор устройств и управление шаблонами.",
+  "license": "MIT",
+  "meshCentralCompat": ">=1.1.0",
+  "hasAdminPanel": false,
+  "homepage": "https://github.com/Sokol549/MeshCentral-BulkScriptRunner",
+  "configUrl": "https://raw.githubusercontent.com/Sokol549/MeshCentral-BulkScriptRunner/main/config.json",
+  "changelogUrl": "https://raw.githubusercontent.com/Sokol549/MeshCentral-BulkScriptRunner/main/changelog.md",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Sokol549/MeshCentral-BulkScriptRunner.git"
+  },
+  "downloadUrl": "https://github.com/Sokol549/MeshCentral-BulkScriptRunner/archive/refs/heads/main.zip"
+}
