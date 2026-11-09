@@ -1,0 +1,12 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path');
+const create=require('../bulkrunner'),dir=fs.mkdtempSync(path.join(os.tmpdir(),'br-release-'));
+let packet,messages=[];const node={_id:'node/a/1',meshid:'mesh/a/1',name:'one',agent:{id:2}},agent={authenticated:2,dbNodeKey:node._id,send(x){packet=JSON.parse(x);}};
+const web={wsagents:{[node._id]:agent},GetNodeWithRights(d,u,id,cb){cb(node,0x20000,true);}},server={datapath:dir,webserver:web};
+const client={user:{_id:'user/a/admin',siteadmin:-1},domain:{id:'a'},ws:{send(x){messages.push(JSON.parse(x));}}};
+const plugin=create({parent:server});
+plugin.serveraction({pluginaction:'run',nodeids:[node._id],target_os:'windows',script:'echo ok',workers:1,timeout:60},client);
+setImmediate(()=>{let id=packet.attempt;plugin.serveraction({pluginaction:'agentResult',event:'ready',attempt:id},agent);let task=messages.filter(m=>m.type==='task').at(-1).task;
+plugin.serveraction({pluginaction:'releaseUnknown',task_id:task.task_id},client);assert.ok(messages.at(-1).error);
+delete web.wsagents[node._id];setTimeout(()=>{let unknown=messages.filter(m=>m.type==='task').at(-1).task;assert.equal(unknown.status,'Unknown');
+plugin.serveraction({pluginaction:'releaseUnknown',task_id:unknown.task_id},client);assert.equal(messages.at(-1).type,'released');
+assert.equal(JSON.parse(fs.readFileSync(path.join(dir,'bulkrunner','history',unknown.task_id+'.json'))).status,'Unknown');console.log('Unknown outcome release check passed');},2200);});

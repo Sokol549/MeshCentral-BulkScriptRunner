@@ -4,7 +4,7 @@ var jobs = {};
 var limit = 4000;
 function report(mesh, message) {
     message.action = 'plugin'; message.plugin = 'bulkrunner'; message.pluginaction = 'agentResult';
-    try { mesh.SendCommand(message); } catch (e) { }
+    try { require('MeshAgent').SendCommand(message); } catch (e) { try { mesh.SendCommand(message); } catch (ignored) { } }
 }
 function utf16Base64(value) {
     var bytes = Buffer.alloc(value.length * 2);
@@ -13,6 +13,7 @@ function utf16Base64(value) {
 }
 function consoleaction(cmd, rights, sessionid, mesh) {
     if (!cmd || typeof cmd.attempt !== 'string' || !/^[a-f0-9]{32}$/.test(cmd.attempt)) return;
+    if (cmd.op === 'probe') { report(mesh, { attempt: cmd.attempt, event: 'ready' }); return; }
     if (cmd.op === 'cancel') {
         var running = jobs[cmd.attempt];
         if (running) { try { process.kill(running.pid); } catch (e) { report(mesh, { attempt: cmd.attempt, event: 'cancelError', error: String(e) }); } }
@@ -32,7 +33,7 @@ function consoleaction(cmd, rights, sessionid, mesh) {
                 input = Buffer.from(cmd.script).toString('base64');
                 body = "$source = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String([Console]::In.ReadToEnd()))\n& ([ScriptBlock]::Create($source))";
             }
-            var script = "$ProgressPreference = 'SilentlyContinue'\n$ErrorActionPreference = 'Stop'\ntry {\n" + body + "\n} catch { [Console]::Error.WriteLine($_.Exception.ToString()); [Console]::Error.WriteLine($_.ScriptStackTrace); exit 1 }\n";
+            var script = "$ProgressPreference = 'SilentlyContinue'\n$ErrorActionPreference = 'Stop'\ntry {\n" + body + "\nif (-not $?) { if ($null -ne $LASTEXITCODE -and $LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; exit 1 }\n} catch { [Console]::Error.WriteLine($_.Exception.ToString()); [Console]::Error.WriteLine($_.ScriptStackTrace); exit 1 }\n";
             var encoded = utf16Base64(script);
             child = require('child_process').execFile(exe, ['powershell', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', encoded], {});
         } else {

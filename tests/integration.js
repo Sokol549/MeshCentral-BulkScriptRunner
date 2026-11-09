@@ -9,6 +9,8 @@ const client = { user:{_id:'user/a/admin',siteadmin:-1,name:'admin'}, domain:{id
 plugin = create({parent:server});
 plugin.serveraction({pluginaction:'run',nodeids:['node/a/1'],target_os:'windows',script:'echo test',workers:1,timeout:60}, client);
 setImmediate(() => {
+  assert.equal(outbound.op,'probe');
+  plugin.serveraction({pluginaction:'agentResult',event:'ready',attempt:outbound.attempt},agent);
   assert.equal(outbound.op,'run');
   plugin.serveraction({pluginaction:'agentResult',event:'finished',attempt:outbound.attempt,exitCode:3,stdout:'out',stderr:'err'}, agent);
   const task=messages.filter(x=>x.type==='task').at(-1).task;

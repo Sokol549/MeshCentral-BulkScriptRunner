@@ -9,6 +9,7 @@ const client={user:{_id:'user/a/admin',siteadmin:-1,name:'admin'},domain:{id:'a'
 plugin=create({parent:server});
 plugin.serveraction({pluginaction:'run',nodeids:[node._id],target_os:'windows',script:'echo ok',workers:1,timeout:20,success_tag:'done'},client);
 setImmediate(()=>{
+ plugin.serveraction({pluginaction:'agentResult',event:'ready',attempt:output.attempt},agent);
  plugin.serveraction({pluginaction:'agentResult',event:'finished',attempt:output.attempt,exitCode:0,stdout:'ok',stderr:''},agent);
  setImmediate(()=>{
   assert.deepEqual(currentTags,['done','existing']);

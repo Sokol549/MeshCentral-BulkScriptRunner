@@ -1,4 +1,4 @@
-# MeshCentral Bulk Script Runner 0.1.4
+# MeshCentral Bulk Script Runner 0.1.5
 
 Экспериментальный плагин для MeshCentral 1.1.0+ и Node.js 18+. Установка через менеджер плагинов:
 

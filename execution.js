@@ -39,6 +39,14 @@ module.exports = function (server, root, send) {
     }
     return function (command, client, user, domain) {
         if (command.pluginaction === 'agentResult') { if (active && active.transport) active.transport.receive(command, client); return true; }
+        if (command.pluginaction === 'releaseUnknown') {
+            if (!active || !active.pool || active.pool.running.size || active.task.status !== 'Unknown' || active.domain !== domain) throw Error('No finished unknown task to release');
+            if (command.task_id !== active.task.task_id) throw Error('Task does not match');
+            active = null;
+            send(client, { type:'released', task_id:command.task_id });
+            return true;
+        }
+        if (command.pluginaction === 'current') { if (active && active.task && active.domain === domain) send(client, {type:'task', task:active.task}); return true; }
         if (command.pluginaction === 'abort') {
             if (!active || active.user !== user._id || !active.pool) throw Error('No active task');
             active.pool.abort(); return true;
@@ -55,7 +63,7 @@ module.exports = function (server, root, send) {
             return true;
         }
         if (command.pluginaction !== 'run') return false;
-        if (active) throw Error('Another task is active or has an unknown outcome');
+        if (active) { if (active.task && active.domain === domain) send(client, {type:'task', task:active.task}); throw Error('Another task is active or has an unknown outcome'); }
         if (!Array.isArray(command.nodeids) || !command.nodeids.length || command.nodeids.length > 1000 || new Set(command.nodeids).size !== command.nodeids.length || command.nodeids.some(id => typeof id !== 'string' || id.split('/').length !== 3 || id.split('/')[0] !== 'node' || id.split('/')[1] !== domain)) throw Error('Invalid targets');
         if (command.target_os !== 'windows' || typeof command.script !== 'string' || !command.script.trim() || Buffer.byteLength(command.script, 'utf8') > 32768 || !Number.isInteger(command.workers) || command.workers < 1 || command.workers > 100 || !Number.isInteger(command.timeout) || command.timeout < 1 || command.timeout > 86400) throw Error('Invalid task settings; script limit is 32768 bytes');
         if (command.success_tag != null && (typeof command.success_tag !== 'string' || !command.success_tag.trim() || command.success_tag.length > 63 || command.success_tag.includes(','))) throw Error('Invalid success tag');
