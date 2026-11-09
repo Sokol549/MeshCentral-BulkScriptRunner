@@ -23,11 +23,16 @@ function consoleaction(cmd, rights, sessionid, mesh) {
     if ((cmd.os === 'windows' && process.platform !== 'win32') || (cmd.os === 'linux' && process.platform !== 'linux')) {
         report(mesh, { attempt: cmd.attempt, event: 'finished', exitCode: null, error: 'ОС устройства не соответствует скрипту' }); return;
     }
-    var child, output = '', errors = '', truncated = false;
+    var child, input = null, output = '', errors = '', truncated = false;
     try {
         if (cmd.os === 'windows') {
             var exe = process.env.windir + '\\System32\\WindowsPowerShell\\v1.0\\powershell.exe';
-            var script = "$ProgressPreference = 'SilentlyContinue'\n$ErrorActionPreference = 'Stop'\ntry {\n" + cmd.script + "\n} catch { [Console]::Error.WriteLine($_.Exception.ToString()); [Console]::Error.WriteLine($_.ScriptStackTrace); exit 1 }\n";
+            var body = cmd.script;
+            if (Buffer.from(cmd.script).length >= 2048) {
+                input = Buffer.from(cmd.script).toString('base64');
+                body = "$source = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String([Console]::In.ReadToEnd()))\n& ([ScriptBlock]::Create($source))";
+            }
+            var script = "$ProgressPreference = 'SilentlyContinue'\n$ErrorActionPreference = 'Stop'\ntry {\n" + body + "\n} catch { [Console]::Error.WriteLine($_.Exception.ToString()); [Console]::Error.WriteLine($_.ScriptStackTrace); exit 1 }\n";
             var encoded = utf16Base64(script);
             child = require('child_process').execFile(exe, ['powershell', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', encoded], {});
         } else {
@@ -41,9 +46,14 @@ function consoleaction(cmd, rights, sessionid, mesh) {
             report(mesh, { attempt: cmd.attempt, event: 'finished', exitCode: typeof code === 'number' ? code : null, stdout: output, stderr: errors, truncated: truncated });
         });
         report(mesh, { attempt: cmd.attempt, event: 'started', pid: child.pid });
+        if (input !== null) child.stdin.write(input);
         child.stdin.end();
     } catch (e) {
-        delete jobs[cmd.attempt];
+        if (child && jobs[cmd.attempt]) {
+            errors += '\nExecutor error: ' + String(e);
+            try { process.kill(child.pid); } catch (killError) { report(mesh, { attempt:cmd.attempt, event:'cancelError', error:String(killError) }); }
+            return;
+        }
         report(mesh, { attempt: cmd.attempt, event: 'finished', exitCode: null, error: String(e), stdout: output, stderr: errors });
     }
 }

@@ -14,7 +14,9 @@ class AgentTransport {
             const agent = this.getAgent(row.node_id);
             if (!agent) return finish({ confirmed:true, exit_code:null, stderr:'Agent is offline' });
             state.agent = agent;
-            try { agent.send(JSON.stringify({ action:'plugin', plugin:'bulkrunner', op:'run', attempt, os:this.targetOS, script:this.script })); }
+            const packet = JSON.stringify({ action:'plugin', plugin:'bulkrunner', op:'run', attempt, os:this.targetOS, script:this.script });
+            if (Buffer.byteLength(packet, 'utf8') > 60000) return finish({ confirmed:true, exit_code:null, stderr:'Encoded request exceeds the agent message limit' });
+            try { agent.send(packet); }
             catch (e) { finish({ confirmed:false, stderr:'Delivery failed; outcome is unknown' }); }
         });
         return { cancel: () => { state.cancelled = true; if (state.agent && this.attempts.has(attempt)) state.agent.send(JSON.stringify({ action:'plugin', plugin:'bulkrunner', op:'cancel', attempt })); } };
@@ -24,7 +26,7 @@ class AgentTransport {
         if (!data || data.agent !== agent || data.node !== agent.dbNodeKey || command.event !== 'finished') return false;
         if (command.exitCode !== null && !Number.isInteger(command.exitCode)) return false;
         this.attempts.delete(command.attempt);
-        data.done({ confirmed:true, exit_code:command.exitCode, stdout:command.stdout, stderr:command.error || command.stderr, truncated:!!command.truncated }); return true;
+        data.done({ confirmed:true, exit_code:command.exitCode, stdout:command.stdout, stderr: [command.stderr || '', command.error || ''].filter(Boolean).join('\n'), truncated:!!command.truncated }); return true;
     }
     disconnected(agent) { for (const [id, data] of this.attempts) { if (data.agent !== agent) continue; this.attempts.delete(id); data.done({ confirmed:false, stderr:'Connection lost; execution outcome is unknown.' }); } }
 }

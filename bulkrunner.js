@@ -42,8 +42,14 @@ function create(parent) {
                     if (err) return send(client, { error: 'Не удалось загрузить устройства' });
                     db.GetAllType('mesh', function(err2, meshes) {
                         if (err2) return send(client, { error: 'Не удалось загрузить группы' });
-                        const agents = (server.webserver && server.webserver.wsagents) || {};
-                        send(client, { type: 'list', presets, meshes: (meshes || []).filter(m => m._id.split('/')[1] === domain).map(m => ({ id: m._id, name: m.name })), nodes: (nodes || []).filter(n => n._id.split('/')[1] === domain).map(n => ({ id: n._id, name: n.name || n._id, meshid: n.meshid, os: n.os || n.osdesc || '', desc: n.desc || '', ip: n.ip || '', tags: Array.isArray(n.tags) ? n.tags : [], online: !!agents[n._id] })) });
+                        const web = server.webserver;
+                        if (!web || typeof web.GetNodeWithRights !== 'function' || !client.domain) return send(client, { error: 'Node access validation is unavailable' });
+                        const candidates = (nodes || []).filter(n => n._id.split('/')[1] === domain);
+                        Promise.all(candidates.map(n => new Promise(resolve => web.GetNodeWithRights(client.domain, user, n._id, (node, rights, visible) => resolve(visible && node ? node : null))))).then(allowed => {
+                            const agents = web.wsagents || {}, visibleNodes = allowed.filter(Boolean);
+                            const groupIds = new Set(visibleNodes.map(n => n.meshid));
+                            send(client, { type: 'list', presets, meshes: (meshes || []).filter(m => m._id.split('/')[1] === domain && groupIds.has(m._id)).map(m => ({ id: m._id, name: m.name })), nodes: visibleNodes.map(n => ({ id: n._id, name: n.name || n._id, meshid: n.meshid, os: n.os || n.osdesc || '', desc: n.desc || '', ip: n.ip || '', tags: Array.isArray(n.tags) ? n.tags : [], online: !!agents[n._id] })) });
+                        }).catch(e => send(client, { error: e.message }));
                     });
                 });
             } else if (action === 'save') {
